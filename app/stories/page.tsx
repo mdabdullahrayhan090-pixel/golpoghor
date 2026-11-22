@@ -1,0 +1,3 @@
+import Link from "next/link";
+import { createClient } from "@/lib/supabase/server";
+export default async function Stories(){const db=await createClient();let rows:any[]=[];if(db){const {data}=await db.from("stories").select("id,title,excerpt,category,created_at").eq("status","published").order("created_at",{ascending:false});rows=data||[];}return <main className="wrap"><div className="sectionhead"><h2>গল্পের সংগ্রহ</h2></div>{rows.length?<div className="grid">{rows.map(s=><article className="storycard" key={s.id}><span className="tag">{s.category||"গল্প"}</span><h3>{s.title}</h3><p>{s.excerpt||""}</p><Link className="plainlink" href={"/stories/"+s.id}>সম্পূর্ণ গল্প পড়ুন →</Link></article>)}</div>:<div className="empty">প্রকাশিত গল্প পাওয়া যায়নি।</div>}</main>}
