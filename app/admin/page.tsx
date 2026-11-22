@@ -25,7 +25,7 @@ export default function AdminPage(){
    db.from("ad_slots").select("id,placement,title,target_url,enabled").order("created_at",{ascending:true}),
    db.from("ad_network_settings").select("home_enabled,home_code,story_enabled,story_code").eq("id",1).maybeSingle()
   ]);
-  const error=s.error||u.error||v.error||a.error||n.error;
+  const error=s.error||u.error||v.error||a.error;
   if(error)setMsg(error.message);
   else {setStories((s.data||[]) as Story[]);setUsers((u.data||[]) as Profile[]);setViews((v.data||[]) as {story_id:string}[]);setAds((a.data||[]) as AdSlot[]);if(n.data)setNetwork(n.data as NetworkSettings);setMsg("");}
   setReady(true);
