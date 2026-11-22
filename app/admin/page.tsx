@@ -8,7 +8,7 @@ export default function AdminPage(){
  const [ready,setReady]=useState(false),[allowed,setAllowed]=useState(false);
  const [stories,setStories]=useState<Story[]>([]),[users,setUsers]=useState<Profile[]>([]),[views,setViews]=useState<{story_id:string}[]>([]);
  const [ads,setAds]=useState<AdSlot[]>([]),[rate,setRate]=useState("0"),[newUrl,setNewUrl]=useState(""),[newTitle,setNewTitle]=useState("স্পন্সর"),[placement,setPlacement]=useState("before_story");
- const [msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState("");
+ const [msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState(""),[storySearch,setStorySearch]=useState("");
  const db=createClient();
  async function load(){
   const {data:{user}}=await db.auth.getUser();
@@ -51,7 +51,9 @@ export default function AdminPage(){
    <article className="storycard"><span className="muted">আনুমানিক লেখক আয়</span><h2>৳{totalEstimate.toFixed(2)}</h2></article>
   </div>
   <h2 style={{marginTop:38}}>গল্প ও ভিউ ব্যবস্থাপনা</h2>
-  {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map(s=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><h3>{s.title}</h3><p>{s.excerpt}</p><p className="muted">লেখক: {s.profiles?.[0]?.display_name||"লেখক"} · ভিউ: {countViews(s.id)} · আনুমানিক আয়: ৳{(countViews(s.id)*rateNum/1000).toFixed(2)}</p><div className="actions"><a className="outline" href={s.status==="published"?"/stories/"+s.id:"/dashboard"}>দেখুন</a><button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
+  <div className="field" style={{marginTop:14}}><label>গল্প খুঁজুন — নাম, লেখক বা Story ID</label><input value={storySearch} onChange={e=>setStorySearch(e.target.value)} placeholder="গল্পের নাম / লেখকের নাম / #StoryID"/></div>
+  {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map((s,index)=>({s,index})).filter(({s})=>[s.title,s.profiles?.[0]?.display_name||"",s.id].some(v=>v.toLowerCase().includes(storySearch.trim().toLowerCase()))).map(({s,index})=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><p className="muted">#{String(index+1).padStart(4,"0")} · Story ID: {s.id.slice(0,8)}</p><h3>{s.title}</h3><p>{s.excerpt}</p><p className="muted">লেখক: {s.profiles?.[0]?.display_name||"লেখক"} · ভিউ: {countViews(s.id)} · আনুমানিক আয়: ৳{(countViews(s.id)*rateNum/1000).toFixed(2)}</p><div className="actions">{s.status==="published"?<a className="outline" href={"/stories/"+s.id} target="_blank" rel="noreferrer">গল্পের আলাদা লিংক ↗</a>:<span className="muted">প্রকাশের পর আলাদা লিংক চালু হবে</span>}<button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
+  {stories.length>0&&stories.every(s=>![s.title,s.profiles?.[0]?.display_name||"",s.id].some(v=>v.toLowerCase().includes(storySearch.trim().toLowerCase())))&&<p className="muted">এই নামে কোনো গল্প পাওয়া যায়নি।</p>}
   <h2 style={{marginTop:38}}>লেখকের আয় নির্ধারণ</h2>
   <section className="formbox" style={{margin:"15px 0",maxWidth:"100%"}}>
    <p>প্রতি ১,০০০ যাচাইকৃত ভিউয়ের জন্য লেখককে কত টাকা হিসাব করা হবে তা নির্ধারণ করো। এটি আনুমানিক আয়; পেমেন্ট আলাদাভাবে যাচাই ও পরিচালনা করতে হবে।</p>
