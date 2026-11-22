@@ -4,13 +4,13 @@ import { createClient } from "@/lib/supabase/client";
 type Story={id:string;title:string;excerpt:string|null;status:string;created_at:string;author_id:string;profiles?:{display_name:string|null}[]|null};
 type Profile={id:string;display_name:string|null;role:string;created_at:string};
 type AdSlot={id:string;placement:string;title:string;target_url:string;enabled:boolean};
-type NetworkSettings={home_enabled:boolean;home_code:string;story_enabled:boolean;story_code:string};
+type NetworkSettings={home_enabled:boolean;home_code:string;story_enabled:boolean;story_code:string};\ntype ImportPreview={title:string;author:string;content:string;sourceUrl:string};
 export default function AdminPage(){
  const [ready,setReady]=useState(false),[allowed,setAllowed]=useState(false);
  const [stories,setStories]=useState<Story[]>([]),[users,setUsers]=useState<Profile[]>([]),[views,setViews]=useState<{story_id:string}[]>([]);
  const [ads,setAds]=useState<AdSlot[]>([]),[newUrl,setNewUrl]=useState(""),[newTitle,setNewTitle]=useState("স্পন্সর"),[placement,setPlacement]=useState("before_story");
  const [network,setNetwork]=useState<NetworkSettings>({home_enabled:false,home_code:"",story_enabled:false,story_code:""});
- const [msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState(""),[storySearch,setStorySearch]=useState("");
+ const [msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState(""),[storySearch,setStorySearch]=useState("");\n const [importUrl,setImportUrl]=useState(""),[importPreview,setImportPreview]=useState<ImportPreview|null>(null),[permission,setPermission]=useState(false);
  const db=createClient();
  async function load(){
   const {data:{user}}=await db.auth.getUser();
@@ -38,7 +38,7 @@ export default function AdminPage(){
  async function addAd(e:React.FormEvent){e.preventDefault();setBusy("ad");const {error}=await db.from("ad_slots").insert({placement,title:newTitle,target_url:newUrl,enabled:false});setMsg(error?error.message:"বিজ্ঞাপন লিংক যোগ হয়েছে। চালু করতে নিচের সুইচ অন করো।");if(!error){setNewUrl("");await load();}setBusy("");}
  async function toggleAd(ad:AdSlot){setBusy(ad.id);const {error}=await db.from("ad_slots").update({enabled:!ad.enabled}).eq("id",ad.id);if(error)setMsg(error.message);else await load();setBusy("");}
  async function deleteAd(id:string){setBusy(id);const {error}=await db.from("ad_slots").delete().eq("id",id);if(error)setMsg(error.message);else await load();setBusy("");}
- async function saveNetwork(e:React.FormEvent){e.preventDefault();setBusy("network");const {error}=await db.from("ad_network_settings").upsert({id:1,...network,updated_at:new Date().toISOString()},{onConflict:"id"});setMsg(error?error.message:"বিজ্ঞাপন নেটওয়ার্কের সেটিংস সংরক্ষণ হয়েছে।");setBusy("");}
+ async function previewImport(e:React.FormEvent){e.preventDefault();setBusy("import");setMsg("");setImportPreview(null);try{const res=await fetch("/api/admin/story-import",{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({action:"preview",url:importUrl})});const data=await res.json();if(!res.ok)throw new Error(data.error||"Preview করা যায়নি।");setImportPreview(data);setMsg("গল্প Preview তৈরি হয়েছে। লেখা দেখে নাও।");}catch(err){setMsg(err instanceof Error?err.message:"গল্প আনা যায়নি।");}finally{setBusy("");}}\n async function saveImportedStory(){if(!importPreview||!permission)return;setBusy("import-save");const {data:{user}}=await db.auth.getUser();if(!user){setMsg("Admin হিসেবে আবার লগইন করো।");setBusy("");return;}const {error}=await db.from("stories").insert({author_id:user.id,title:importPreview.title,category:"আমদানিকৃত গল্প",excerpt:("উৎস: "+importPreview.sourceUrl).slice(0,500),content:importPreview.content,status:"draft",source_url:importPreview.sourceUrl});if(error)setMsg(error.message);else{setMsg("গল্প Draft হিসেবে Import হয়েছে। Story তালিকায় পাবে।");setImportPreview(null);setImportUrl("");setPermission(false);await load();}setBusy("");}\n async function saveNetwork(e:React.FormEvent){e.preventDefault();setBusy("network");const {error}=await db.from("ad_network_settings").upsert({id:1,...network,updated_at:new Date().toISOString()},{onConflict:"id"});setMsg(error?error.message:"বিজ্ঞাপন নেটওয়ার্কের সেটিংস সংরক্ষণ হয়েছে।");setBusy("");}
  if(!ready)return <main className="wrap"><p>{msg}</p></main>;
  if(!allowed)return <main className="formbox"><h1>Admin Panel</h1><p>{msg}</p><a className="btn" href="/login">লগইন</a></main>;
  return <main className="wrap">
@@ -49,6 +49,22 @@ export default function AdminPage(){
    <article className="storycard"><span className="muted">প্রকাশিত গল্প</span><h2>{stories.filter(s=>s.status==="published").length}</h2></article>
    <article className="storycard"><span className="muted">যাচাইকৃত ভিউ</span><h2>{totalViews}</h2></article>
   </div>
+  <h2 style={{marginTop:30}}>লিংক দিয়ে গল্প Import</h2>
+  <section className="formbox" style={{margin:"15px 0",maxWidth:"100%"}}>
+   <p>পাবলিক ওয়েবপেজের লিংক দিলে গল্পের শিরোনাম ও লেখা শনাক্ত করে Preview দেখাবে। লগইন/পেওয়াল বা অনুমতি-নিষেধাজ্ঞা এড়িয়ে কোনো লেখা আনা হবে না। শুধু নিজের লেখা, অনুমতিপ্রাপ্ত বা উন্মুক্ত লাইসেন্সের গল্প Import করবে।</p>
+   <form onSubmit={previewImport}>
+    <div className="field"><label>গল্পের ওয়েব লিংক</label><input type="url" required value={importUrl} onChange={e=>setImportUrl(e.target.value)} placeholder="https://example.com/story"/></div>
+    <button className="btn" disabled={busy==="import"}>{busy==="import"?"গল্প খোঁজা হচ্ছে…":"গল্প Preview করো"}</button>
+   </form>
+   {importPreview&&<article className="storycard" style={{marginTop:16}}>
+    <span className="tag">Preview · Draft হবে</span><h3>{importPreview.title}</h3>
+    {importPreview.author&&<p className="muted">মূল লেখক: {importPreview.author}</p>}
+    <p className="muted">উৎস: <a href={importPreview.sourceUrl} target="_blank" rel="noreferrer">{importPreview.sourceUrl}</a></p>
+    <div style={{whiteSpace:"pre-wrap",maxHeight:360,overflowY:"auto",lineHeight:1.8,border:"1px solid var(--border, #ddd)",padding:12,borderRadius:10}}>{importPreview.content}</div>
+    <label style={{display:"flex",gap:8,alignItems:"flex-start",margin:"14px 0"}}><input type="checkbox" checked={permission} onChange={e=>setPermission(e.target.checked)}/>আমি নিশ্চিত করছি যে এই গল্পটি আমার নিজের, অথবা এটি Import ও প্রকাশের প্রয়োজনীয় অনুমতি/লাইসেন্স আমার আছে।</label>
+    <div className="actions"><button className="btn" disabled={!permission||busy==="import-save"} onClick={saveImportedStory}>Draft হিসেবে Import করো</button><button className="outline" onClick={()=>setImportPreview(null)}>বাতিল</button></div>
+   </article>}
+  </section>
   <h2 style={{marginTop:38}}>গল্প ও ভিউ ব্যবস্থাপনা</h2>
   <div className="field" style={{marginTop:14}}><label>গল্প খুঁজুন — নাম, লেখক বা Story ID</label><input value={storySearch} onChange={e=>setStorySearch(e.target.value)} placeholder="গল্পের নাম / লেখকের নাম / #StoryID"/></div>
   {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map((s,index)=>({s,index})).filter(({s})=>[s.title,s.profiles?.[0]?.display_name||"",s.id].some(v=>v.toLowerCase().includes(storySearch.trim().toLowerCase()))).map(({s,index})=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><p className="muted">#{String(index+1).padStart(4,"0")} · Story ID: {s.id.slice(0,8)}</p><h3>{s.title}</h3><p>{s.excerpt}</p><p className="muted">লেখক: {s.profiles?.[0]?.display_name||"লেখক"} · ভিউ: {countViews(s.id)}</p><div className="actions">{s.status==="published"?<a className="outline" href={"/stories/"+s.id} target="_blank" rel="noreferrer">গল্পের আলাদা লিংক ↗</a>:<span className="muted">প্রকাশের পর আলাদা লিংক চালু হবে</span>}<button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
