@@ -4,10 +4,12 @@ import { createClient } from "@/lib/supabase/client";
 type Story={id:string;title:string;excerpt:string|null;status:string;created_at:string;author_id:string;profiles?:{display_name:string|null}[]|null};
 type Profile={id:string;display_name:string|null;role:string;created_at:string};
 type AdSlot={id:string;placement:string;title:string;target_url:string;enabled:boolean};
+type NetworkSettings={home_enabled:boolean;home_code:string;story_enabled:boolean;story_code:string};
 export default function AdminPage(){
  const [ready,setReady]=useState(false),[allowed,setAllowed]=useState(false);
  const [stories,setStories]=useState<Story[]>([]),[users,setUsers]=useState<Profile[]>([]),[views,setViews]=useState<{story_id:string}[]>([]);
  const [ads,setAds]=useState<AdSlot[]>([]),[newUrl,setNewUrl]=useState(""),[newTitle,setNewTitle]=useState("স্পন্সর"),[placement,setPlacement]=useState("before_story");
+ const [network,setNetwork]=useState<NetworkSettings>({home_enabled:false,home_code:"",story_enabled:false,story_code:""});
  const [msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState(""),[storySearch,setStorySearch]=useState("");
  const db=createClient();
  async function load(){
@@ -16,15 +18,16 @@ export default function AdminPage(){
   const {data:me}=await db.from("profiles").select("role").eq("id",user.id).single();
   if(me?.role!=="admin"){setMsg("এই পেজটি শুধু Admin-এর জন্য।");setReady(true);return;}
   setAllowed(true);
-  const [s,u,v,a]=await Promise.all([
+  const [s,u,v,a,n]=await Promise.all([
    db.from("stories").select("id,title,excerpt,status,created_at,author_id,profiles(display_name)").order("created_at",{ascending:false}),
    db.from("profiles").select("id,display_name,role,created_at").order("created_at",{ascending:false}),
    db.from("story_views").select("story_id"),
-   db.from("ad_slots").select("id,placement,title,target_url,enabled").order("created_at",{ascending:true})
+   db.from("ad_slots").select("id,placement,title,target_url,enabled").order("created_at",{ascending:true}),
+   db.from("ad_network_settings").select("home_enabled,home_code,story_enabled,story_code").eq("id",1).maybeSingle()
   ]);
-  const error=s.error||u.error||v.error||a.error;
+  const error=s.error||u.error||v.error||a.error||n.error;
   if(error)setMsg(error.message);
-  else {setStories((s.data||[]) as Story[]);setUsers((u.data||[]) as Profile[]);setViews((v.data||[]) as {story_id:string}[]);setAds((a.data||[]) as AdSlot[]);setMsg("");}
+  else {setStories((s.data||[]) as Story[]);setUsers((u.data||[]) as Profile[]);setViews((v.data||[]) as {story_id:string}[]);setAds((a.data||[]) as AdSlot[]);if(n.data)setNetwork(n.data as NetworkSettings);setMsg("");}
   setReady(true);
  }
  useEffect(()=>{load();},[]);
@@ -35,6 +38,7 @@ export default function AdminPage(){
  async function addAd(e:React.FormEvent){e.preventDefault();setBusy("ad");const {error}=await db.from("ad_slots").insert({placement,title:newTitle,target_url:newUrl,enabled:false});setMsg(error?error.message:"বিজ্ঞাপন লিংক যোগ হয়েছে। চালু করতে নিচের সুইচ অন করো।");if(!error){setNewUrl("");await load();}setBusy("");}
  async function toggleAd(ad:AdSlot){setBusy(ad.id);const {error}=await db.from("ad_slots").update({enabled:!ad.enabled}).eq("id",ad.id);if(error)setMsg(error.message);else await load();setBusy("");}
  async function deleteAd(id:string){setBusy(id);const {error}=await db.from("ad_slots").delete().eq("id",id);if(error)setMsg(error.message);else await load();setBusy("");}
+ async function saveNetwork(e:React.FormEvent){e.preventDefault();setBusy("network");const {error}=await db.from("ad_network_settings").upsert({id:1,...network,updated_at:new Date().toISOString()},{onConflict:"id"});setMsg(error?error.message:"বিজ্ঞাপন নেটওয়ার্কের সেটিংস সংরক্ষণ হয়েছে।");setBusy("");}
  if(!ready)return <main className="wrap"><p>{msg}</p></main>;
  if(!allowed)return <main className="formbox"><h1>Admin Panel</h1><p>{msg}</p><a className="btn" href="/login">লগইন</a></main>;
  return <main className="wrap">
@@ -59,6 +63,20 @@ export default function AdminPage(){
     <button className="btn" disabled={busy==="ad"}>বিজ্ঞাপন লিংক যোগ করো</button>
    </form>
    {ads.map(ad=><article className="storycard" key={ad.id} style={{marginTop:12}}><b>{ad.title}</b><p className="muted">{ad.placement} · {ad.target_url}</p><div className="actions"><button className="outline" disabled={busy===ad.id} onClick={()=>toggleAd(ad)}>{ad.enabled?"বন্ধ করো":"চালু করো"}</button><button className="outline" disabled={busy===ad.id} onClick={()=>deleteAd(ad.id)}>মুছে ফেলো</button><span className="muted">{ad.enabled?"চালু":"বন্ধ"}</span></div></article>)}
+  </section>
+  <h2 style={{marginTop:30}}>বিজ্ঞাপন নেটওয়ার্ক কোড</h2>
+  <section className="formbox" style={{margin:"15px 0",maxWidth:"100%"}}>
+   <p>Monetag বা অনুমোদিত বিজ্ঞাপন নেটওয়ার্কের কোড এখানে সংরক্ষণ করা যাবে। হোমপেজ ও গল্পের জন্য আলাদা কোড এবং On/Off সুইচ আছে। কোডটি শুধু বিশ্বস্ত, অনুমোদিত নেটওয়ার্কের কাছ থেকে নেবে।</p>
+   <form onSubmit={saveNetwork}>
+    <h3>হোমপেজ বিজ্ঞাপন</h3>
+    <div className="field"><label>হোমপেজ বিজ্ঞাপন চালু</label><select value={network.home_enabled?"on":"off"} onChange={e=>setNetwork(v=>({...v,home_enabled:e.target.value==="on"}))}><option value="off">বন্ধ</option><option value="on">চালু</option></select></div>
+    <div className="field"><label>হোমপেজ Ad Code</label><textarea rows={5} value={network.home_code} onChange={e=>setNetwork(v=>({...v,home_code:e.target.value}))} placeholder="এখানে অনুমোদিত বিজ্ঞাপন কোড পেস্ট করো"/></div>
+    <h3>গল্পের পেজ বিজ্ঞাপন</h3>
+    <div className="field"><label>গল্পের পেজ বিজ্ঞাপন চালু</label><select value={network.story_enabled?"on":"off"} onChange={e=>setNetwork(v=>({...v,story_enabled:e.target.value==="on"}))}><option value="off">বন্ধ</option><option value="on">চালু</option></select></div>
+    <div className="field"><label>গল্পের পেজ Ad Code</label><textarea rows={5} value={network.story_code} onChange={e=>setNetwork(v=>({...v,story_code:e.target.value}))} placeholder="এখানে অনুমোদিত বিজ্ঞাপন কোড পেস্ট করো"/></div>
+    <button className="btn" disabled={busy==="network"}>কোড ও সেটিংস সংরক্ষণ</button>
+   </form>
+   <p className="muted">নিরাপত্তার জন্য এই সংস্করণে কোড সংরক্ষণ হবে; যাচাই ছাড়া সরাসরি চালানো হবে না।</p>
   </section>
   <h2 style={{marginTop:38}}>ব্যবহারকারী ও Role ({users.length})</h2>
   <div className="grid">{users.map(u=><article className="storycard" key={u.id}><h3>{u.display_name||"নাম নেই"}</h3><p className="muted">অ্যাকাউন্ট ID: {u.id.slice(0,8)}…</p><div className="field"><label>অ্যাকাউন্ট Role</label><select value={u.role} disabled={busy===u.id} onChange={e=>changeRole(u.id,e.target.value)}><option value="reader">Reader</option><option value="author">Author</option><option value="admin">Admin</option></select></div></article>)}</div>
