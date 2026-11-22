@@ -51,8 +51,8 @@ create policy "profile owner can update name" on public.profiles for update to a
 create policy "admins update profiles" on public.profiles for update to authenticated using (public.current_user_role()='admin') with check (public.current_user_role()='admin');
 create policy "published stories are public" on public.stories for select using (status='published');
 create policy "authors read own stories" on public.stories for select to authenticated using (author_id=auth.uid() or public.current_user_role()='admin');
-create policy "authors create own drafts" on public.stories for insert to authenticated with check (author_id=auth.uid() and status='draft');
-create policy "authors update own drafts" on public.stories for update to authenticated using (author_id=auth.uid() and status='draft') with check (author_id=auth.uid() and status='draft');
+create policy "authors create own drafts" on public.stories for insert to authenticated with check (author_id=auth.uid() and status='draft' and public.current_user_role() in ('author','admin'));
+create policy "authors update own drafts" on public.stories for update to authenticated using (author_id=auth.uid() and status='draft' and public.current_user_role() in ('author','admin')) with check (author_id=auth.uid() and status='draft' and public.current_user_role() in ('author','admin'));
 create policy "admins update stories" on public.stories for update to authenticated using (public.current_user_role()='admin') with check (public.current_user_role()='admin');
 
 create or replace function public.admin_publish_story(story_id uuid, publish boolean) returns void language plpgsql security definer set search_path=public as $$
