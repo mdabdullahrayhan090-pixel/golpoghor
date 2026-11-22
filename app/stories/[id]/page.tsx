@@ -1,3 +1,21 @@
 import { notFound } from "next/navigation";
 import { createClient } from "@/lib/supabase/server";
-export default async function Story({params}:{params:Promise<{id:string}>}){const {id}=await params;const db=await createClient();if(!db) return <main className="reader"><div className="notice">গল্প পড়তে Supabase সংযোগ সেটআপ করতে হবে।</div></main>;const {data}=await db.from("stories").select("title,content,category,created_at,profiles(display_name)").eq("id",id).eq("status","published").single();if(!data)notFound();return <main className="reader"><span className="tag">{data.category||"গল্প"}</span><h1>{data.title}</h1><p className="muted">লেখক: {(data.profiles as any)?.display_name||"গল্পঘর লেখক"}</p><div className="readerbody">{data.content}</div><p className="muted">গল্পঘর · পড়ার জন্য ধন্যবাদ</p></main>}
+export default async function Story({params}:{params:Promise<{id:string}>}){
+ const {id}=await params;const db=await createClient();
+ if(!db)return <main className="reader"><div className="notice">গল্প পড়তে Supabase সংযোগ সেটআপ করতে হবে।</div></main>;
+ const {data}=await db.from("stories").select("id,title,content,category,created_at,profiles(display_name)").eq("id",id).eq("status","published").single();
+ if(!data)notFound();
+ await db.rpc("record_story_view",{p_story_id:id});
+ const {data:ads}=await db.from("ad_slots").select("id,title,target_url,placement").eq("enabled",true);
+ const adList=ads||[];
+ const adBlock=(placement:string)=><>{adList.filter(a=>a.placement===placement).map(a=><aside key={a.id} className="notice" style={{margin:"22px 0"}}><small>বিজ্ঞাপন · স্পন্সর</small><p><a href={a.target_url} target="_blank" rel="sponsored nofollow noopener">{a.title}</a></p></aside>)}</>;
+ return <main className="reader">
+  {adBlock("before_story")}
+  <span className="tag">{data.category||"গল্প"}</span><h1>{data.title}</h1>
+  <p className="muted">লেখক: {(data.profiles as any)?.display_name||"গল্পঘর লেখক"}</p>
+  <div className="readerbody">{data.content}</div>
+  {adBlock("in_story")}
+  {adBlock("after_story")}
+  <p className="muted">গল্পঘর · পড়ার জন্য ধন্যবাদ</p>
+ </main>;
+}
