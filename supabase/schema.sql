@@ -1,4 +1,4 @@
--- Run this file in Supabase SQL Editor.
+-- গল্পঘর Supabase schema. Safe to run again.
 create extension if not exists pgcrypto;
 create table if not exists public.profiles (
  id uuid primary key references auth.users(id) on delete cascade,
@@ -16,27 +16,49 @@ create table if not exists public.stories (
 create index if not exists stories_status_created_idx on public.stories(status,created_at desc);
 create index if not exists stories_author_idx on public.stories(author_id);
 create or replace function public.handle_new_user() returns trigger language plpgsql security definer set search_path=public as $$
-begin insert into public.profiles(id,display_name) values(new.id,coalesce(new.raw_user_meta_data->>'display_name','নতুন পাঠক')); return new; end; $$;
+begin
+ insert into public.profiles(id,display_name) values(new.id,coalesce(new.raw_user_meta_data->>'display_name','নতুন পাঠক'));
+ return new;
+end; $$;
 drop trigger if exists on_auth_user_created on auth.users;
 create trigger on_auth_user_created after insert on auth.users for each row execute procedure public.handle_new_user();
 create or replace function public.current_user_role() returns text language sql stable security definer set search_path=public as $$
  select role from public.profiles where id=auth.uid();
 $$;
+-- Prevent a user from granting themselves a privileged role.
+create or replace function public.protect_profile_role() returns trigger language plpgsql security definer set search_path=public as $$
+begin
+ if new.role is distinct from old.role and coalesce(public.current_user_role(),'') <> 'admin' then
+   raise exception 'Only an admin can change account roles';
+ end if;
+ return new;
+end; $$;
+drop trigger if exists protect_profile_role_trigger on public.profiles;
+create trigger protect_profile_role_trigger before update on public.profiles for each row execute function public.protect_profile_role();
+
 alter table public.profiles enable row level security;
 alter table public.stories enable row level security;
 drop policy if exists "profiles visible to authenticated" on public.profiles;
 drop policy if exists "profile owner can update name" on public.profiles;
+drop policy if exists "admins update profiles" on public.profiles;
 drop policy if exists "published stories are public" on public.stories;
 drop policy if exists "authors read own stories" on public.stories;
 drop policy if exists "authors create own drafts" on public.stories;
 drop policy if exists "authors update own drafts" on public.stories;
+drop policy if exists "admins update stories" on public.stories;
 create policy "profiles visible to authenticated" on public.profiles for select to authenticated using (true);
-create policy "profile owner can update name" on public.profiles for update to authenticated using (auth.uid()=id) with check (auth.uid()=id and role=public.current_user_role());
+create policy "profile owner can update name" on public.profiles for update to authenticated using (auth.uid()=id) with check (auth.uid()=id);
+create policy "admins update profiles" on public.profiles for update to authenticated using (public.current_user_role()='admin') with check (public.current_user_role()='admin');
 create policy "published stories are public" on public.stories for select using (status='published');
 create policy "authors read own stories" on public.stories for select to authenticated using (author_id=auth.uid() or public.current_user_role()='admin');
 create policy "authors create own drafts" on public.stories for insert to authenticated with check (author_id=auth.uid() and status='draft');
 create policy "authors update own drafts" on public.stories for update to authenticated using (author_id=auth.uid() and status='draft') with check (author_id=auth.uid() and status='draft');
+create policy "admins update stories" on public.stories for update to authenticated using (public.current_user_role()='admin') with check (public.current_user_role()='admin');
+
 create or replace function public.admin_publish_story(story_id uuid, publish boolean) returns void language plpgsql security definer set search_path=public as $$
-begin if public.current_user_role() is distinct from 'admin' then raise exception 'Admin permission required'; end if; update public.stories set status=case when publish then 'published' else 'draft' end,updated_at=now() where id=story_id; end; $$;
+begin
+ if public.current_user_role() is distinct from 'admin' then raise exception 'Admin permission required'; end if;
+ update public.stories set status=case when publish then 'published' else 'draft' end,updated_at=now() where id=story_id;
+end; $$;
 revoke all on function public.admin_publish_story(uuid,boolean) from public;
 grant execute on function public.admin_publish_story(uuid,boolean) to authenticated;
