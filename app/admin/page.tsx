@@ -1,7 +1,7 @@
 "use client";
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-type Story={id:string;title:string;excerpt:string|null;status:string;created_at:string;author_id:string;profiles?:{display_name:string|null}|null};
+type Story={id:string;title:string;excerpt:string|null;status:string;created_at:string;author_id:string;profiles?:{display_name:string|null}[]|null};
 type Profile={id:string;display_name:string|null;role:string;created_at:string};
 export default function AdminPage(){
  const [ready,setReady]=useState(false),[allowed,setAllowed]=useState(false),[stories,setStories]=useState<Story[]>([]),[users,setUsers]=useState<Profile[]>([]),[msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState("");
@@ -29,7 +29,7 @@ export default function AdminPage(){
   <div className="sectionhead"><h1>Admin Panel</h1><a className="outline" href="/dashboard">লেখক ড্যাশবোর্ড</a></div>
   {msg&&<p className="notice">{msg}</p>}
   <h2>গল্প ব্যবস্থাপনা ({stories.length})</h2>
-  {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map(s=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><h3>{s.title}</h3><p>{s.excerpt}</p><small className="muted">লেখক: {s.profiles?.display_name||s.author_id.slice(0,8)}</small><div className="actions"><a className="outline" href={s.status==="published"?"/stories/"+s.id:"/dashboard"}>দেখুন</a><button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
+  {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map(s=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><h3>{s.title}</h3><p>{s.excerpt}</p><small className="muted">লেখক: {s.profiles?.[0]?.display_name||s.author_id.slice(0,8)}</small><div className="actions"><a className="outline" href={s.status==="published"?"/stories/"+s.id:"/dashboard"}>দেখুন</a><button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
   <h2 style={{marginTop:42}}>ব্যবহারকারী ও Role ({users.length})</h2>
   <div className="grid">{users.map(u=><article className="storycard" key={u.id}><h3>{u.display_name||"নাম নেই"}</h3><p className="muted">{u.id.slice(0,8)}…</p><div className="field"><label>অ্যাকাউন্ট Role</label><select value={u.role} disabled={busy===u.id} onChange={e=>changeRole(u.id,e.target.value)}><option value="reader">Reader</option><option value="author">Author</option><option value="admin">Admin</option></select></div></article>)}</div>
  </main>;
