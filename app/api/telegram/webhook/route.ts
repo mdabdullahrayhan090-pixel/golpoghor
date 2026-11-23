@@ -58,7 +58,8 @@ async function handleMessage(message: TelegramMessage) {
   if (text === "/start") {
     try {
       const db = getAdminDb();
-      await db.from("telegram_subscribers").upsert({ chat_id: String(chatId), user_id: String(userId), username: message.from?.username || null, first_name: message.from?.first_name || null, is_active: true, updated_at: new Date().toISOString() }, { onConflict: "chat_id" });
+      const { error } = await db.from("telegram_subscribers").upsert({ chat_id: String(chatId), user_id: String(userId), username: message.from?.username || null, first_name: message.from?.first_name || null, is_active: true, updated_at: new Date().toISOString() }, { onConflict: "chat_id" });
+      if (error) throw error;
     } catch {
       await send(chatId, "সাবস্ক্রিপশন চালু করা যায়নি। পরে আবার /start দাও।");
       return;
@@ -70,7 +71,8 @@ async function handleMessage(message: TelegramMessage) {
   if (text === "/stop") {
     try {
       const db = getAdminDb();
-      await db.from("telegram_subscribers").update({ is_active: false, updated_at: new Date().toISOString() }).eq("chat_id", String(chatId));
+      const { error } = await db.from("telegram_subscribers").update({ is_active: false, updated_at: new Date().toISOString() }).eq("chat_id", String(chatId));
+      if (error) throw error;
       await send(chatId, "নতুন গল্পের নোটিফিকেশন বন্ধ করা হয়েছে। আবার চালু করতে /start দাও।");
     } catch {
       await send(chatId, "এখন নোটিফিকেশন বন্ধ করা যাচ্ছে না। পরে চেষ্টা করো।");
