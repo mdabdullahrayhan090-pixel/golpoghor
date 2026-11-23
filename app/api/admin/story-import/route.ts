@@ -52,6 +52,7 @@ export async function POST(req: Request) {
     if (!db) return NextResponse.json({ error: "Supabase সংযোগ পাওয়া যায়নি।" }, { status: 503 });
     const { data: { user } } = await db.auth.getUser();
     if (!user) return NextResponse.json({ error: "আগে Admin হিসেবে লগইন করো।" }, { status: 401 });
+    if ((user.email || "").toLowerCase() !== "baginam674@gmail.com") return NextResponse.json({ error: "এই কাজটি শুধু নির্ধারিত Admin করতে পারবেন।" }, { status: 403 });
     const { data: profile } = await db.from("profiles").select("role").eq("id", user.id).single();
     if (profile?.role !== "admin") return NextResponse.json({ error: "শুধু Admin এই কাজ করতে পারবেন।" }, { status: 403 });
     const body = await req.json();
