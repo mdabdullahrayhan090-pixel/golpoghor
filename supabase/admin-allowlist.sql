@@ -25,7 +25,7 @@ $$;
 
 drop trigger if exists enforce_golpoghor_admin_allowlist_trigger on public.profiles;
 create trigger enforce_golpoghor_admin_allowlist_trigger
-before insert or update of role on public.profiles
+before insert or update on public.profiles
 for each row execute function public.enforce_golpoghor_admin_allowlist();
 
 -- Demote any other accounts that currently have Admin.
