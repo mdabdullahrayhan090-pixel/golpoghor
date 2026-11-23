@@ -17,8 +17,9 @@ export default function AdminPage(){
  async function load(){
   const {data:{user}}=await db.auth.getUser();
   if(!user){setMsg("Admin Panel দেখতে আগে লগইন করো।");setReady(true);return;}
+  if((user.email||"").toLowerCase()!=="baginam674@gmail.com"){setMsg("এই Admin Panel শুধু নির্ধারিত মালিকের অ্যাকাউন্টের জন্য।");setReady(true);return;}
   const {data:me}=await db.from("profiles").select("role").eq("id",user.id).single();
-  if(me?.role!=="admin"){setMsg("এই পেজটি শুধু Admin-এর জন্য।");setReady(true);return;}
+  if(me?.role!=="admin"){setMsg("এই পেজটি শুধু নির্ধারিত Admin-এর জন্য।");setReady(true);return;}
   setAllowed(true);
   const [s,u,v,a,n]=await Promise.all([
    db.from("stories").select("id,title,excerpt,status,created_at,author_id,profiles(display_name)").order("created_at",{ascending:false}),
@@ -99,6 +100,6 @@ export default function AdminPage(){
    <p className="muted">নিরাপত্তার জন্য এই সংস্করণে কোড সংরক্ষণ হবে; যাচাই ছাড়া সরাসরি চালানো হবে না।</p>
   </section>
   <h2 style={{marginTop:38}}>ব্যবহারকারী ও Role ({users.length})</h2>
-  <div className="grid">{users.map(u=><article className="storycard" key={u.id}><h3>{u.display_name||"নাম নেই"}</h3><p className="muted">অ্যাকাউন্ট ID: {u.id.slice(0,8)}…</p><div className="field"><label>অ্যাকাউন্ট Role</label><select value={u.role} disabled={busy===u.id} onChange={e=>changeRole(u.id,e.target.value)}><option value="reader">Reader</option><option value="author">Author</option><option value="admin">Admin</option></select></div></article>)}</div>
+  <div className="grid">{users.map(u=><article className="storycard" key={u.id}><h3>{u.display_name||"নাম নেই"}</h3><p className="muted">অ্যাকাউন্ট ID: {u.id.slice(0,8)}…</p><div className="field"><label>অ্যাকাউন্ট Role</label>{u.role==="admin"?<span className="tag">Admin (সুরক্ষিত)</span>:<select value={u.role} disabled={busy===u.id} onChange={e=>changeRole(u.id,e.target.value)}><option value="reader">Reader</option><option value="author">Author</option></select>}</div></article>)}</div>
  </main>;
 }
