@@ -60,7 +60,8 @@ async function handleMessage(message: TelegramMessage) {
       const db = getAdminDb();
       const { error } = await db.from("telegram_subscribers").upsert({ chat_id: String(chatId), user_id: String(userId), username: message.from?.username || null, first_name: message.from?.first_name || null, is_active: true, updated_at: new Date().toISOString() }, { onConflict: "chat_id" });
       if (error) throw error;
-    } catch {
+    } catch (error) {
+      console.error("Telegram subscriber registration failed:", error instanceof Error ? error.message : String(error));
       await send(chatId, "সাবস্ক্রিপশন চালু করা যায়নি। পরে আবার /start দাও।");
       return;
     }
