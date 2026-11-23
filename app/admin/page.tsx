@@ -6,6 +6,7 @@ type Profile={id:string;display_name:string|null;role:string;created_at:string};
 type AdSlot={id:string;placement:string;title:string;target_url:string;enabled:boolean};
 type NetworkSettings={home_enabled:boolean;home_code:string;story_enabled:boolean;story_code:string};
 type ImportPreview={title:string;author:string;content:string;sourceUrl:string};
+type StoryEdit={id:string;title:string;excerpt:string;content:string;next_part_url:string};
 export default function AdminPage(){
  const [ready,setReady]=useState(false),[allowed,setAllowed]=useState(false);
  const [stories,setStories]=useState<Story[]>([]),[users,setUsers]=useState<Profile[]>([]),[views,setViews]=useState<{story_id:string}[]>([]);
@@ -13,6 +14,7 @@ export default function AdminPage(){
  const [network,setNetwork]=useState<NetworkSettings>({home_enabled:false,home_code:"",story_enabled:false,story_code:""});
  const [msg,setMsg]=useState("লোড হচ্ছে…"),[busy,setBusy]=useState(""),[storySearch,setStorySearch]=useState("");
  const [importUrl,setImportUrl]=useState(""),[importPreview,setImportPreview]=useState<ImportPreview|null>(null),[permission,setPermission]=useState(false);
+ const [editing,setEditing]=useState<StoryEdit|null>(null);
  const db=createClient();
  async function load(){
   const {data:{user}}=await db.auth.getUser();
@@ -35,6 +37,9 @@ export default function AdminPage(){
  }
  useEffect(()=>{load();},[]);
  const countViews=(id:string)=>views.filter(v=>v.story_id===id).length;
+ async function openEdit(id:string){setBusy("edit");setMsg("");const {data,error}=await db.from("stories").select("id,title,excerpt,content,next_part_url").eq("id",id).single();if(error){setMsg(error.message.includes("next_part_url")?"পরবর্তী পর্বের সুবিধার জন্য Supabase-এ migration SQL চালাতে হবে।":error.message);}else setEditing({id,title:data.title||"",excerpt:data.excerpt||"",content:data.content||"",next_part_url:data.next_part_url||""});setBusy("");}
+ async function saveStoryEdit(e:React.FormEvent){e.preventDefault();if(!editing)return;setBusy("edit-save");const {error}=await db.from("stories").update({title:editing.title.trim(),excerpt:editing.excerpt,content:editing.content,next_part_url:editing.next_part_url.trim()||null,updated_at:new Date().toISOString()}).eq("id",editing.id);setMsg(error?error.message:"গল্পের পরিবর্তন সংরক্ষণ হয়েছে।");if(!error){setEditing(null);await load();}setBusy("");}
+ async function copyStoryLink(id:string){const url=window.location.origin+"/stories/"+id;try{await navigator.clipboard.writeText(url);setMsg("গল্পের লিংক কপি হয়েছে: "+url);}catch{setMsg("লিংক কপি করা যায়নি। লিংকটি: "+url);}}
  const totalViews=views.length;
  async function publish(id:string,yes:boolean){setBusy(id);setMsg("");const {error}=await db.rpc("admin_publish_story",{story_id:id,publish:yes});if(error)setMsg(error.message);else await load();setBusy("");}
  async function changeRole(id:string,role:string){setBusy(id);const {error}=await db.from("profiles").update({role}).eq("id",id);if(error)setMsg(error.message);else await load();setBusy("");}
@@ -72,7 +77,8 @@ export default function AdminPage(){
   </section>
   <h2 style={{marginTop:38}}>গল্প ও ভিউ ব্যবস্থাপনা</h2>
   <div className="field" style={{marginTop:14}}><label>গল্প খুঁজুন — নাম, লেখক বা Story ID</label><input value={storySearch} onChange={e=>setStorySearch(e.target.value)} placeholder="গল্পের নাম / লেখকের নাম / #StoryID"/></div>
-  {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map((s,index)=>({s,index})).filter(({s})=>[s.title,s.profiles?.[0]?.display_name||"",s.id].some(v=>v.toLowerCase().includes(storySearch.trim().toLowerCase()))).map(({s,index})=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><p className="muted">#{String(index+1).padStart(4,"0")} · Story ID: {s.id.slice(0,8)}</p><h3>{s.title}</h3><p>{s.excerpt}</p><p className="muted">লেখক: {s.profiles?.[0]?.display_name||"লেখক"} · ভিউ: {countViews(s.id)}</p><div className="actions">{s.status==="published"?<a className="outline" href={"/stories/"+s.id} target="_blank" rel="noreferrer">গল্পের আলাদা লিংক ↗</a>:<span className="muted">প্রকাশের পর আলাদা লিংক চালু হবে</span>}<button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
+  {stories.length===0?<p className="muted">এখনো কোনো গল্প জমা হয়নি।</p>:<div className="grid">{stories.map((s,index)=>({s,index})).filter(({s})=>[s.title,s.profiles?.[0]?.display_name||"",s.id].some(v=>v.toLowerCase().includes(storySearch.trim().toLowerCase()))).map(({s,index})=><article className="storycard" key={s.id}><span className="tag">{s.status==="published"?"প্রকাশিত":"খসড়া"}</span><p className="muted">#{String(index+1).padStart(4,"0")} · Story ID: {s.id.slice(0,8)}</p><h3>{s.title}</h3><p>{s.excerpt}</p><p className="muted">লেখক: {s.profiles?.[0]?.display_name||"লেখক"} · ভিউ: {countViews(s.id)}</p><div className="actions"><button className="outline" disabled={busy==="edit"} onClick={()=>openEdit(s.id)}>গল্প Edit</button><button className="outline" onClick={()=>copyStoryLink(s.id)}>লিংক Copy</button>{s.status==="published"?<a className="outline" href={"/stories/"+s.id} target="_blank" rel="noreferrer">গল্প দেখুন ↗</a>:<span className="muted">প্রকাশের পর পাঠকরা দেখতে পাবে</span>}<button className="btn" disabled={busy===s.id} onClick={()=>publish(s.id,s.status!=="published")}>{s.status==="published"?"আনপাবলিশ":"প্রকাশ করুন"}</button></div></article>)}</div>}
+  {editing&&<section className="formbox" style={{margin:"18px 0",maxWidth:"100%"}}><h2>গল্প Edit</h2><form onSubmit={saveStoryEdit}><div className="field"><label>গল্পের শিরোনাম</label><input required value={editing.title} onChange={e=>setEditing(v=>v?({...v,title:e.target.value}):v)}/></div><div className="field"><label>সংক্ষিপ্ত পরিচিতি</label><textarea rows={3} value={editing.excerpt} onChange={e=>setEditing(v=>v?({...v,excerpt:e.target.value}):v)}/></div><div className="field"><label>গল্পের সম্পূর্ণ লেখা</label><textarea required rows={12} value={editing.content} onChange={e=>setEditing(v=>v?({...v,content:e.target.value}):v)}/></div><div className="field"><label>পরবর্তী পর্বের লিংক (ঐচ্ছিক)</label><input type="url" placeholder="https://golpoghor-kappa.vercel.app/stories/..." value={editing.next_part_url} onChange={e=>setEditing(v=>v?({...v,next_part_url:e.target.value}):v)}/></div><div className="actions"><button className="btn" disabled={busy==="edit-save"}>পরিবর্তন সংরক্ষণ</button><button type="button" className="outline" onClick={()=>setEditing(null)}>বাতিল</button></div></form></section>}
   {stories.length>0&&stories.every(s=>![s.title,s.profiles?.[0]?.display_name||"",s.id].some(v=>v.toLowerCase().includes(storySearch.trim().toLowerCase())))&&<p className="muted">এই নামে কোনো গল্প পাওয়া যায়নি।</p>}
   <h2 style={{marginTop:38}}>বিজ্ঞাপন ব্যবস্থাপনা</h2>
   <section className="formbox" style={{margin:"15px 0",maxWidth:"100%"}}>
