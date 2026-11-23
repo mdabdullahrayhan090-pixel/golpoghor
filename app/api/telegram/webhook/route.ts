@@ -87,7 +87,7 @@ async function handleMessage(message: TelegramMessage) {
       return;
     }
     const lines = data.map((story: { id: string; title: string; excerpt?: string | null }, index: number) =>
-      `${index + 1}. ${story.title}\n${(story.excerpt || "").slice(0, 160)}\n${siteUrl}/story/${encodeURIComponent(story.id)}`
+      `${index + 1}. ${story.title}\n${(story.excerpt || "").slice(0, 160)}\n${siteUrl}/stories/${encodeURIComponent(story.id)}`
     );
     await send(chatId, "📖 গল্পঘরের সাম্প্রতিক গল্প:\n\n" + lines.join("\n\n"));
     return;
