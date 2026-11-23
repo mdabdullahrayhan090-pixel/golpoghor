@@ -99,19 +99,18 @@ async function handleMessage(message: TelegramMessage) {
   }
 
   if (text === "/stories") {
-    const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
-    const key = process.env.NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
-    if (!url || !key) {
-      await send(chatId, "গল্পের ডেটাবেস এখন সংযুক্ত নেই।");
-      return;
-    }
-    const db = createSupabaseClient(url, key, { auth: { persistSession: false } });
-    const { data, error } = await db.from("stories")
-      .select("id,title,excerpt,created_at")
-      .eq("status", "published")
-      .order("created_at", { ascending: false })
-      .limit(8);
-    if (error) {
+    let data: Array<{ id: string; title: string; excerpt?: string | null; created_at?: string }> | null = null;
+    try {
+      const db = getAdminDb();
+      const result = await db.from("stories")
+        .select("id,title,excerpt,created_at")
+        .eq("status", "published")
+        .order("created_at", { ascending: false })
+        .limit(8);
+      if (result.error) throw result.error;
+      data = result.data;
+    } catch (error) {
+      console.error("Telegram stories query failed:", JSON.stringify(error, Object.getOwnPropertyNames(error)));
       await send(chatId, "এই মুহূর্তে গল্পের তালিকা আনা যাচ্ছে না। পরে আবার চেষ্টা করো।");
       return;
     }
