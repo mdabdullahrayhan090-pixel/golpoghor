@@ -15,6 +15,13 @@ type TelegramUpdate = { message?: TelegramMessage };
 
 const siteUrl = "https://golpoghor-kappa.vercel.app";
 
+function getAdminDb() {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceKey) throw new Error("Subscriber storage is not configured");
+  return createSupabaseClient(url, serviceKey, { auth: { persistSession: false } });
+}
+
 async function telegram(method: string, body: Record<string, unknown>) {
   const token = process.env.TELEGRAM_BOT_TOKEN;
   if (!token) throw new Error("Telegram bot is not configured");
@@ -48,7 +55,30 @@ async function handleMessage(message: TelegramMessage) {
   const text = (message.text || "").trim();
   if (!chatId || !userId || !text) return;
 
-  if (text === "/start" || text === "/help") {
+  if (text === "/start") {
+    try {
+      const db = getAdminDb();
+      await db.from("telegram_subscribers").upsert({ chat_id: String(chatId), user_id: String(userId), username: message.from?.username || null, first_name: message.from?.first_name || null, is_active: true, updated_at: new Date().toISOString() }, { onConflict: "chat_id" });
+    } catch {
+      await send(chatId, "সাবস্ক্রিপশন চালু করা যায়নি। পরে আবার /start দাও।");
+      return;
+    }
+    await send(chatId, "✅ গল্পঘরের নতুন গল্পের নোটিফিকেশন চালু হয়েছে!\nবন্ধ করতে /stop লিখো।\n\nওয়েবসাইট: " + siteUrl);
+    return;
+  }
+
+  if (text === "/stop") {
+    try {
+      const db = getAdminDb();
+      await db.from("telegram_subscribers").update({ is_active: false, updated_at: new Date().toISOString() }).eq("chat_id", String(chatId));
+      await send(chatId, "নতুন গল্পের নোটিফিকেশন বন্ধ করা হয়েছে। আবার চালু করতে /start দাও।");
+    } catch {
+      await send(chatId, "এখন নোটিফিকেশন বন্ধ করা যাচ্ছে না। পরে চেষ্টা করো।");
+    }
+    return;
+  }
+
+  if (text === "/help") {
     await send(chatId,
       "📚 গল্পঘর Telegram Bot-এ স্বাগতম!\n\n" +
       "/stories — সাম্প্রতিক প্রকাশিত গল্প\n" +
